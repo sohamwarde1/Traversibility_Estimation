@@ -35,6 +35,8 @@ def get_total_transform(
 
 def build_pcd(rgb_path, depth_path):
 
+    fx, fy, cx, cy = 1052.19970703125, 1052.19970703125, 956.3457641601562, 553.95703125
+
     depth_scale = 1000.0   # mm -> meters
     depth_trunc = 30.0
 
