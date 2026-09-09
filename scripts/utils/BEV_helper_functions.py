@@ -190,3 +190,7 @@ def generate_bev_from_o3d(
         normals=normals,
     )
 
+def ranges():
+    X_RANGE = (0,15)
+    Y_RANGE = (-8,8)
+    return X_RANGE,Y_RANGE
