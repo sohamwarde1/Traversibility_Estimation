@@ -33,6 +33,58 @@ def get_total_transform(
 
     return T_base @ T_optical_to_body
 
+def fit_ground_plane(
+    pcd: o3d.geometry.PointCloud,
+    distance_threshold: float = 0.05,
+    ransac_n: int = 3,
+    num_iterations: int = 1000,
+    near_field_radius: float | None = 5.0,
+    min_inlier_fraction: float = 0.1,
+):
+    
+    points = np.asarray(pcd.points)
+
+    if near_field_radius is not None:
+        xy_dist = np.linalg.norm(points[:, :2], axis=1)
+        mask = xy_dist <= near_field_radius
+        if mask.sum() < ransac_n:
+            raise RuntimeError(
+                f"Only {mask.sum()} points within near_field_radius="
+                f"{near_field_radius} m; need at least {ransac_n}."
+            )
+        subset_pcd = pcd.select_by_index(np.where(mask)[0])
+    else:
+        subset_pcd = pcd
+
+    plane_coeffs, inlier_indices = subset_pcd.segment_plane(
+        distance_threshold=distance_threshold,
+        ransac_n=ransac_n,
+        num_iterations=num_iterations,
+    )
+    plane_coeffs = np.asarray(plane_coeffs)
+
+    inlier_fraction = len(inlier_indices) / len(subset_pcd.points)
+    if inlier_fraction < min_inlier_fraction:
+        # raise RuntimeError(
+        #     f"RANSAC plane fit inlier fraction {inlier_fraction:.2f} "
+        #     f"below threshold {min_inlier_fraction}. Fit likely unreliable "
+        #     f"(e.g. no clear ground plane in near field)."
+        # )
+        print("*** RANSAC Fit Unreliable ***")
+
+    # Ensure normal points "up" (positive z component) for a consistent sign
+    # convention on height-above-plane later.
+    a, b, c, d = plane_coeffs
+    if c < 0:
+        plane_coeffs = -plane_coeffs
+
+    return plane_coeffs, inlier_indices, subset_pcd
+
+
+def height_above_plane(points: np.ndarray, plane_coeffs: np.ndarray) -> np.ndarray:
+    a, b, c, d = plane_coeffs
+    return points @ np.array([a, b, c]) + d
+
 def build_pcd(rgb_path, depth_path):
 
     fx, fy, cx, cy = 1052.19970703125, 1052.19970703125, 956.3457641601562, 553.95703125
@@ -179,7 +231,9 @@ def generate_bev_from_o3d(
     # height       = -Y (pts_3d[:, 1], inverted because +Y points down in camera frame)
 
     bev_points = np.column_stack((pts_3d[:, 2], pts_3d[:, 0]))  # Forward (Z), Lateral (X)
-    heights = pts_3d[:, 1]  # Invert Y so up is positive
+    #heights = pts_3d[:, 1]  # Invert Y so up is positive
+    plane_coeffs, inlier_idx, near_pcd = fit_ground_plane(pcd, near_field_radius=5.0)
+    heights = height_above_plane(np.asarray(pcd.points), plane_coeffs)
 
     return generate_bev_grid(
         points=bev_points,
