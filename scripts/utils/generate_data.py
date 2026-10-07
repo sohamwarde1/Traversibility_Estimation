@@ -70,7 +70,7 @@ for idx in saved_indices:
     src_image_path = os.path.join(images_dir, src_image_name)
     
     # Output name combining odom index and image index
-    dst_image_name = f"frame_odom_{idx}_img_{img_idx:06d}.jpeg"
+    dst_image_name = f"{img_idx:06d}.jpeg"
     dst_image_path = os.path.join(output_dir, dst_image_name)
     
     if os.path.exists(src_image_path):
